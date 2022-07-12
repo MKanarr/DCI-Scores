@@ -43,10 +43,11 @@ async def scores(ctx):
         world_c_str = '\n'.join(map(str, world_c_sort)).replace("(","").replace(")","")
         open_c_str = '\n'.join(map(str, open_c_sort)).replace("(","").replace(")","")
 
-        emb = discord.Embed(title=show_name)
+        emb = discord.Embed(title=show_name, url=f"https://www.dci.org/scores/final-scores/{show_slug}")
         emb.description = show_location
         emb.add_field(name="World Class", value=world_c_str, inline=False)
         emb.add_field(name="Open Class", value=open_c_str, inline=False)
+        emb.add_field(name="Recap", value=f"https://www.dci.org/scores/recap/{show_slug}", inline=False)
 
         await ctx.send(embed=emb)
 
