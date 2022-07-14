@@ -8,6 +8,8 @@ from os import getenv
 
 load_dotenv()
 
+# client
+
 bot = commands.Bot(command_prefix='.')
 
 @bot.command()
