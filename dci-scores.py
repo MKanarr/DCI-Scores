@@ -1,4 +1,4 @@
-import json
+from __future__ import division
 import discord
 import aiohttp
 import operator
@@ -8,49 +8,88 @@ from os import getenv
 
 load_dotenv()
 
-# client
+
+class Corps:
+    def __init__(self, name, score, division):
+        self.name = name
+        self.score = score
+        self.division = division
+
+    def __str__(self):
+        return f'{self.name} - {self.score}\n'
+
+    def __repr__(self):
+        return str(self)
 
 bot = commands.Bot(command_prefix='.')
 
 @bot.command()
 async def scores(ctx):
-    comp_url = getenv('COMP_URL')
+    show_url = getenv('SHOW_URL')
     score_url = getenv('SCORE_URL')
 
     async with aiohttp.ClientSession() as session:
-        async with session.get(comp_url) as response:
+        async with session.get(show_url) as response:
             if response.status == 200:
-                comp_res = await response.json()
+                show_info = await response.json()
         
-        show_slug = comp_res[0]['slug']
-        show_name = comp_res[0]['eventName'] 
-        show_location = comp_res[0]['location']
+        show_slug = show_info[0]['slug']
+        show_name = show_info[0]['eventName'] 
+        show_location = show_info[0]['location']
 
-        async with session.get(score_url + show_slug) as response:
+        async with session.get(f'{score_url}{show_slug}') as response:
             if response.status == 200:
-                show_res = await response.json()
+                score_info = await response.json()
 
-        world_c = {}
-        open_c = {}
+        scores = []
+        divisions = []
 
-        for show_info in show_res:
-            if show_info['divisionName'] == 'World Class':
-                world_c[show_info['groupName']] = show_info['totalScore']
-            else:
-                open_c[show_info['groupName']] = show_info['totalScore']
+        for field in score_info:
+            if field['divisionName'] not in divisions:
+                divisions.append(field['divisionName'])
+            scores.append(Corps(field['groupName'], field['totalScore'], field['divisionName']))
 
-        world_c_sort = sorted(world_c.items(), key=operator.itemgetter(1), reverse=True)
-        open_c_sort = sorted(open_c.items(), key=operator.itemgetter(1), reverse=True)
+        ordered_placements = {key: [] for key in divisions}
 
-        world_c_str = '\n'.join(map(str, world_c_sort)).replace("(","").replace(")","")
-        open_c_str = '\n'.join(map(str, open_c_sort)).replace("(","").replace(")","")
+        for key in ordered_placements:
+            for corps in scores:
+                if corps.division == key:
+                    ordered_placements[key].append(corps)
 
-        emb = discord.Embed(title=show_name, url=f"https://www.dci.org/scores/final-scores/{show_slug}")
-        emb.description = show_location
-        emb.add_field(name="World Class", value=world_c_str, inline=False)
-        emb.add_field(name="Open Class", value=open_c_str, inline=False)
-        emb.add_field(name="Recap", value=f"https://www.dci.org/scores/recap/{show_slug}", inline=False)
+            sort_scores = sorted(ordered_placements[key], key=lambda corps: corps.score, reverse=True)
+            ordered_placements[key] = sort_scores
 
+        field_embed = []
+
+        for key, val in ordered_placements.items():
+            tmp = {
+                'name': None,
+                'value': None,
+                'inline?': False,
+            }
+
+            tmp['name'] = key
+            tmp['value'] = str(val).strip('[').strip(']').replace(',','')
+
+            field_embed.append(tmp)
+
+        field_embed.append(
+            {
+                'name': 'Recap',
+                'value': f'https://www.dci.org/scores/recap/{show_slug}',
+                'inline?': False,
+            }
+        )
+
+        msg_embed = {
+            'title': show_name,
+            'url': f'https://www.dci.org/scores/final-scores/{show_slug}',
+            'description': show_location,
+            'fields': field_embed,
+        }
+
+        emb = discord.Embed.from_dict(msg_embed)
+        
         await ctx.send(embed=emb)
 
 
