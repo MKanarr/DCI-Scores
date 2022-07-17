@@ -1,7 +1,6 @@
 from __future__ import division
 import discord
 import aiohttp
-import operator
 from discord.ext import commands
 from dotenv import load_dotenv
 from os import getenv
