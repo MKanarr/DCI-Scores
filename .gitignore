@@ -1,5 +1,5 @@
 .env
-bot-env/
+dcicord/
 *.zip
 docker/
 .DS_Store
