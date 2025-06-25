@@ -1,7 +1,10 @@
 import discord
 import requests
 
-hook_url = f'https://discord.com/api/webhooks/1125909458015490148/jPDvMFHhDsALHqFZtOiPTUiEtud8zUZVf7riAkOPq_l6rBfr3i_KMRgXNwlvCND14L1a'
+from dotenv import load_dotenv
+from os import getenv
+
+hook_url = getenv('TEST_HOOK_URL')
 
 msg = {
     "embeds": [
