@@ -110,6 +110,11 @@ def sort_show_scores(show_res_data, show_thumnail):
     all_ordered_placements = []
     all_show_info = []
 
+    event_name = show_res_data[0]['competition']['eventName']
+    event_date = show_res_data[0]['competition']['date']
+    event_location = show_res_data[0]['competition']['location']
+    show_slug = show_res_data[0]['competition']['slug']
+
     # populate show score data from api response
     for show_details in show_res_data:
         # populate divisions present at show - world, open, etc.
@@ -129,13 +134,12 @@ def sort_show_scores(show_res_data, show_thumnail):
         ordered_placements[key] = sort_scores
 
     # show information
-    all_show_info.append(Show(show_res_data[0]['competition']['eventName'], show_res_data[0]['competition']['date'], show_thumnail, show_res_data[0]['competition']['location'], show_res_data[0]['competition']['slug']))
+    all_show_info.append(Show(event_name, event_date, show_thumnail, event_location, show_slug))
     all_ordered_placements.append(ordered_placements)
 
     return all_show_info, all_ordered_placements
 
 def create_embed(show_info, ordered_placements):
-    field_embeds = []
     embed = []
     show_name = show_info[0].event_name
     show_date = show_info[0].date.split('T')[0]
@@ -187,9 +191,7 @@ def create_embed(show_info, ordered_placements):
         }
     }
 
-    field_embeds.append(msg_embed)
-
-    return field_embeds
+    return msg_embed
 
 def post_embed(msg_embed):
     for show_embed in msg_embed:
@@ -205,17 +207,13 @@ def process_show(show_entry_data):
 
     all_show_info, all_ordered_placements = sort_show_scores(show_res_data.json(), show_entry_data['ShowImageThumb'])
 
-    field_embed = create_embed(all_show_info, all_ordered_placements)
+    return create_embed(all_show_info, all_ordered_placements)
 
-    post_embed(field_embed)
-
-    update_table(all_show_info)
-
-def update_table(all_show_info):
-    for show in all_show_info:
+def update_table(show_items):
+    for show_item in show_items:
         ddb_table.update_item(
             Key={
-                'ShowSlug': show.slug,
+                'ShowSlug': show_item['ShowSlug'],
             },
             UpdateExpression='SET ShowRead = :val1',
             ExpressionAttributeValues={
@@ -229,126 +227,23 @@ def read_items():
         FilterExpression=Attr('ShowDate').lte('2025-07-04') & Attr('ShowRead').eq('True')
     )
 
-    # print(entry)
-
     if len(entry['Items']) == 0:
         return
     
-    ### new idea
+    return entry
 
-    show_items = entry['Items']
+def show_magic():
+    field_embeds = []
+
+    db_entry = read_items()
+
+    show_items = db_entry['Items']
 
     for show_entry in show_items:
-        process_show(show_entry)
+        field_embeds.append(process_show(show_entry))
 
+    post_embed(field_embeds)
 
-    # webhook.execute()
+    update_table(show_items)
 
-    # return 
-    ###
-    
-    # for item in entry['Items']:
-    #     show_slugs.append(item['ShowSlug'])
-    #     show_img.append(item['ShowImageThumb'])
-
-    # for idx, slug in enumerate(show_slugs):
-    #     res = requests.get(f'https://api.dci.org/api/v1/competitions/{slug}')
-    
-    #     if res.status_code == 200 and len(res.json()) != 0:
-    #         show_res.append(res.json())
-
-    # if len(show_res) == 0:
-    #     return
-    
-    # for idx, specific_show in enumerate(show_res):
-
-    #     divisons = []
-    #     scores = []
-        
-    #     for show_details in specific_show:
-    #         if show_details['divisionName'] not in divisons:
-    #             divisons.append(show_details['divisionName'])
-    #         scores.append(Corps(show_details['groupName'], show_details['totalScore'], show_details['divisionName'], show_details['rank']))
-
-    #     ordered_placements = {key: [] for key in divisons}
-
-    #     for key in ordered_placements:
-    #         for corps in scores:
-    #             if corps.division == key:
-    #                 ordered_placements[key].append(corps)
-
-    #         sort_scores = sorted(ordered_placements[key], key=lambda corps: corps.score, reverse=True)
-    #         ordered_placements[key] = sort_scores
-
-    #     all_show_info.append(Show(specific_show[0]['competition']['eventName'], specific_show[0]['competition']['date'], show_img[idx], specific_show[0]['competition']['location'], specific_show[0]['competition']['slug']))
-    #     all_ordered_placements.append(ordered_placements)
-
-    # for idx, show_placements in enumerate(all_ordered_placements):
-    #     embed = []
-
-    #     embed.append(
-    #         {
-    #             'name': 'Date',
-    #             'value': all_show_info[idx].date.split('T')[0],
-    #             'inline?': False
-    #         }
-    #     )
-
-    #     embed.append(
-    #         {
-    #             'name': 'Location',
-    #             'value': all_show_info[idx].location,
-    #             'inline?': False
-    #         }
-    #     )
-
-    #     for key, val in reversed(show_placements.items()):
-    #         tmp = {
-    #             'name': None,
-    #             'value': None,
-    #             'inline?': False,
-    #         }
-
-    #         tmp['name'] = key
-    #         tmp['value'] = str(val).strip('[').strip(']').replace(',','')
-
-    #         embed.append(tmp)
-
-    #     embed.append(
-    #         {
-    #             'name': 'Recap',
-    #             'value': f'https://www.dci.org/scores/recap/{all_show_info[idx].slug}'
-    #         }
-    #     )
-
-    #     msg_embed = {
-    #         'title': all_show_info[idx].event_name,
-    #         'url': f'https://www.dci.org/scores/final-scores/{all_show_info[idx].slug}',
-    #         'fields': embed,
-    #         'image': {
-    #             'url': f'{all_show_info[idx].image}'
-    #         }
-    #     }
-
-    #     field_embeds.append(msg_embed)
-
-    # for show_embed in field_embeds:
-    #     webhook.add_embed(show_embed)
-
-    # webhook.execute()
-
-    # update table
-    # for show in all_show_info:
-    #     ddb_table.update_item(
-    #         Key={
-    #             'ShowSlug': show.slug,
-    #         },
-    #         UpdateExpression='SET ShowRead = :val1',
-    #         ExpressionAttributeValues={
-    #             ':val1': 'True'
-    #         }
-    #     )
-
-
-# main()
-read_items()
+show_magic()
