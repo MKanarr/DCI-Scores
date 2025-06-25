@@ -2,4 +2,3 @@
 bot-env/
 *.zip
 docker/
-dci-hook.py
