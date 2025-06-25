@@ -187,27 +187,3 @@ def lambda_handler(event, context):
     post_embed(field_embeds)
 
     update_table(show_items)
-
-if __name__ == "__main__":
-    event = {
-        "Items": [
-            {
-                "ShowName": "Drums Across the Desert",
-                "ShowDate": "2023-07-03",
-                'ShowImageThumb': 'https://production.assets.dci.org/600x600-inset/673bb9167ac93c02e40aeb72_meF9wup6CoLxGvOpMoFx1FvdLR_swHiL.jpg',
-                "ShowSlug": "2023-drums-across-the-desert",
-                "ShowRead": "False"
-            },
-            {
-                "ShowName": "Rotary Music Festival",
-                "ShowDate": "2023-07-03",
-                'ShowImageThumb': 'https://production.assets.dci.org/600x600-inset/673bb9167ac93c02e40aeb72_meF9wup6CoLxGvOpMoFx1FvdLR_swHiL.jpg',
-                "ShowSlug": "2023-rotary-music-festival",
-                "ShowRead": "False"
-            }    
-        ]
-    }
-
-    print('calling')
-
-    lambda_handler(None, None)
