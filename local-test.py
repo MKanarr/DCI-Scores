@@ -234,9 +234,7 @@ def read_items():
 
 def show_magic():
     field_embeds = []
-
     db_entry = read_items()
-
     show_items = db_entry['Items']
 
     for show_entry in show_items:
