@@ -9,7 +9,7 @@ from os import getenv
 load_dotenv()
 
 # webhook
-webhook = DiscordWebhook(url=getenv('HOOK_URL'))
+webhook = DiscordWebhook(url=getenv('TEST_HOOK_URL'))
 
 # client
 ddb = boto3.resource('dynamodb', 
@@ -48,7 +48,7 @@ class Corps:
     def __repr__(self):
         return str(self)
 
-def main():
+def create_table():
     # create table
     ddb.create_table(
                         AttributeDefinitions=[
@@ -57,7 +57,7 @@ def main():
                                 'AttributeType': 'S'
                             }
                         ],
-                        TableName='DCI-Shows-2027',
+                        TableName='DCI-Shows-2028',
                         KeySchema=[
                             {
                                 'AttributeName': 'ShowSlug',
@@ -72,13 +72,13 @@ def main():
     
     print('CreatedTable')
 
-    ddb_table = ddb.Table('DCI-Shows-2027')
+    ddb_table = ddb.Table('DCI-Shows-2028')
 
     input = [
         {
             'ShowName': 'DCI Tour Preview',
             'ShowDate': '2025-06-27',
-            'ShowImageThumb': 'https://production.assets.dci.org/600x600-inset/673bb9167ac93c02e40aeb72_meF9wup6CoLxGvOpMoFx1FvdLR_swHiL.jpg',
+            'ShowImageThumb': 'https://production.assets.dci.org/600x600-inset/673bb9337ac93c02e40aeb73_JfiaPv1ZU3gwyg0BDdr9YxT55ylpRmQx.jpg',
             'ShowSlug': '2023-drums-across-the-desert',
             'ShowRead': 'False'
         },
@@ -139,7 +139,7 @@ def sort_show_scores(show_res_data, show_thumnail):
 
     return all_show_info, all_ordered_placements
 
-def create_embed(show_info, ordered_placements):
+def create_embed(name, date, show_info, ordered_placements):
     embed = []
     show_name = show_info[0].event_name
     show_date = show_info[0].date.split('T')[0]
@@ -150,7 +150,7 @@ def create_embed(show_info, ordered_placements):
     embed.append(
         {
             'name': 'Date',
-            'value': show_date,
+            'value': date,
             'inline?': False
         }
     )
@@ -224,7 +224,7 @@ def update_table(show_items):
 def read_items():     
     
     entry = ddb_table.scan(
-        FilterExpression=Attr('ShowDate').lte('2025-07-04') & Attr('ShowRead').eq('True')
+        FilterExpression=Attr('ShowDate').lte('2025-07-04') & Attr('ShowRead').eq('False')
     )
 
     if len(entry['Items']) == 0:
