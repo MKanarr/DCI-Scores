@@ -4,60 +4,41 @@ import requests
 from boto3.dynamodb.conditions import Attr
 from discord_webhook import DiscordWebhook
 from dotenv import load_dotenv
+from dataclasses import dataclass
 from os import getenv
+from datetime import datetime
 
-load_dotenv()
-
-# webhook
-webhook = DiscordWebhook(url=getenv('TEST_HOOK_URL'))
-
-# client
-ddb = boto3.resource('dynamodb', 
-                        endpoint_url='http://localhost:8000',
-                        region_name='foo',
-                        aws_access_key_id='foo',
-                        aws_secret_access_key='foo')
-
-# db table 
-ddb_table = ddb.Table(getenv('DYNAMO_TABLE_LOCAL'))
-
+@dataclass
 class Show:
-    def __init__(self, event_name, date, image, location, slug):
-        self.event_name = event_name
-        self.date = date
-        self.image = image
-        self.location = location
-        self.slug = slug
+    event_name: str
+    date: str
+    image: str
+    location: str
+    slug: str
 
     def __str__(self):
         return f'{self.event_name} - {self.date} - {self.image} - {self.location} - {self.slug}'
 
-    def __repr__(self):
-        return str(self)
-
+@dataclass
 class Corps:
-    def __init__(self, name, score, division, rank):
-        self.name = name
-        self.score = score
-        self.division = division
-        self.rank = rank
+    name: str
+    score: float
+    division: str
+    rank: int
 
     def __str__(self):
         return f'{self.rank} - {self.name} - {self.score}\n'
-
-    def __repr__(self):
-        return str(self)
-
-def create_table():
+    
+def create_table(dynamo_db):
     # create table
-    ddb.create_table(
+    dynamo_db.create_table(
                         AttributeDefinitions=[
                             {
                                 'AttributeName': 'ShowSlug',
                                 'AttributeType': 'S'
                             }
                         ],
-                        TableName='DCI-Shows-2028',
+                        TableName='DCI-Shows-2025',
                         KeySchema=[
                             {
                                 'AttributeName': 'ShowSlug',
@@ -72,7 +53,7 @@ def create_table():
     
     print('CreatedTable')
 
-    ddb_table = ddb.Table('DCI-Shows-2028')
+    ddb_table = dynamo_db.Table('DCI-Shows-2025')
 
     input = [
         {
@@ -102,7 +83,24 @@ def create_table():
         ddb_table.put_item(Item=show_info)
 
     print('Populated table')
-
+    
+def init_services():
+    load_dotenv()
+    # webhook
+    webhook = DiscordWebhook(url=getenv('TEST_HOOK_URL'))
+    # client
+    dynamo_db = boto3.resource(
+                            'dynamodb', 
+                            endpoint_url='http://localhost:8000',
+                            region_name='foo',
+                            aws_access_key_id='foo',
+                            aws_secret_access_key='foo'
+                        )
+    # db table
+    # create_table(dynamo_db)
+    dynamo_table = dynamo_db.Table(getenv('DYNAMO_TABLE_LOCAL'))
+    return webhook, dynamo_table
+    
 def sort_show_scores(show_res_data, show_thumnail):
 
     divisions = []
@@ -139,79 +137,72 @@ def sort_show_scores(show_res_data, show_thumnail):
 
     return all_show_info, all_ordered_placements
 
-def create_embed(name, date, show_info, ordered_placements):
-    embed = []
-    show_name = show_info[0].event_name
-    show_date = show_info[0].date.split('T')[0]
-    show_location = show_info[0].location
-    show_slug = show_info[0].slug
-    show_image = show_info[0].image
+def create_embed(show_info, ordered_placements):
+    show = show_info[0]
 
-    embed.append(
+    embed_fields = [
         {
             'name': 'Date',
-            'value': date,
+            'value': show.date.split('T')[0],
             'inline?': False
-        }
-    )
-
-    embed.append(
+        },
         {
             'name': 'Location',
-            'value': show_location,
+            'value': show.location,
             'inline?': False
         }
-    )
+    ]
 
-    for key, val in reversed((ordered_placements[0]).items()):
-        tmp = {
-            'name': None,
-            'value': None,
-            'inline?': False,
-        }
+    for division, corps_list in reversed((ordered_placements[0]).items()):
+        embed_fields.append(
+            {
+                'name': division,
+                'value': ''.join(str(c) for c in corps_list),
+                'inline?': False,
+            }
+        )
 
-        tmp['name'] = key
-        tmp['value'] = str(val).strip('[').strip(']').replace(',','')
-
-        embed.append(tmp)
-
-    embed.append(
+    embed_fields.append(
         {
             'name': 'Recap',
-            'value': f'https://www.dci.org/scores/recap/{show_slug}'
+            'value': f'https://www.dci.org/scores/recap/{show.slug}'
         }
     )
 
     msg_embed = {
-        'title': show_name,
-        'url': f'https://www.dci.org/scores/final-scores/{show_slug}',
-        'fields': embed,
+        'title': show.event_name,
+        'url': f'https://www.dci.org/scores/final-scores/{show.slug}',
+        'fields': embed_fields,
         'image': {
-            'url': f'{show_image}'
+            'url': f'{show.image}'
         }
     }
 
     return msg_embed
 
-def post_embed(msg_embed):
+def post_embed(webhook, msg_embed):
     for show_embed in msg_embed:
         webhook.add_embed(show_embed)
 
-    webhook.execute()
+    webhook.execute(remove_embeds=True)
 
 def process_show(show_entry_data):
 
     slug = show_entry_data['ShowSlug']
 
-    show_res_data = requests.get(f'{getenv("SCORE_URL")}{slug}')
+    try:
+        show_res_data = requests.get(f'{getenv("SCORE_URL")}{slug}')
+        show_res_data.raise_for_status()
+        show_data = show_res_data.json()
+        all_show_info, all_ordered_placements = sort_show_scores(show_data, show_entry_data['ShowImageThumb'])
+        return create_embed(all_show_info, all_ordered_placements)
+    except (requests.RequestException, ValueError) as e:
+        print(f'Error processing show {slug}: {e}')
+        return None
 
-    all_show_info, all_ordered_placements = sort_show_scores(show_res_data.json(), show_entry_data['ShowImageThumb'])
-
-    return create_embed(all_show_info, all_ordered_placements)
-
-def update_table(show_items):
+def update_table(show_items, dynamo_table):
     for show_item in show_items:
-        ddb_table.update_item(
+        dynamo_table.update_item(
             Key={
                 'ShowSlug': show_item['ShowSlug'],
             },
@@ -221,27 +212,38 @@ def update_table(show_items):
             }
         )
     
-def read_items():     
-    
-    entry = ddb_table.scan(
-        FilterExpression=Attr('ShowDate').lte('2025-07-04') & Attr('ShowRead').eq('False')
+def read_items(dynamo_table): 
+    current_date = datetime.today().strftime('%Y-%m-%d')
+    print(current_date)    
+    entry = dynamo_table.scan(
+        FilterExpression=Attr('ShowDate').lte("2025-06-30")
     )
 
-    if len(entry['Items']) == 0:
-        return
+    print("printing entry")
+    print(entry)
     
     return entry
 
 def show_magic():
     field_embeds = []
-    db_entry = read_items()
+    webhook, dynamo_table = init_services()
+
+    db_entry = read_items(dynamo_table)
+
+    if len(db_entry['Items']) == 0:
+        return
+    
     show_items = db_entry['Items']
+    
+    print(show_items)
 
     for show_entry in show_items:
-        field_embeds.append(process_show(show_entry))
+        embed = process_show(show_entry)
+        if embed:
+            field_embeds.append(embed)
 
-    post_embed(field_embeds)
+    post_embed(webhook, field_embeds)
 
-    update_table(show_items)
+    update_table(show_items, dynamo_table)
 
 show_magic()
