@@ -12,6 +12,98 @@ from discord_webhook import DiscordWebhook
 from dataclasses import dataclass
 from bs4 import BeautifulSoup
 
+def create_score_table(dynamo_db):
+    dynamo_db.create_table(
+                    AttributeDefinitions=[
+                        {
+                            'AttributeName': 'ShowSlug',
+                            'AttributeType': 'S'
+                        }
+                    ],
+                    TableName='DCI-Shows-2025',
+                    KeySchema=[
+                        {
+                            'AttributeName': 'ShowSlug',
+                            'KeyType': 'HASH'
+                        }
+                    ],
+                    ProvisionedThroughput= {
+                            'ReadCapacityUnits': 10,
+                            'WriteCapacityUnits': 10
+                    }
+                )
+
+    print('CreatedTable')
+
+    dynamo_table = dynamo_db.Table('DCI-Shows-2025')
+
+    input = [
+        {
+            'ShowName': 'Drums Along the Rockies',
+            'ShowDate': '2025-06-28',
+            'ShowImageThumb': 'https://production.assets.dci.org/600x600-inset/673bb9497ac93c02e40aeb74_WOfwkJeXxqafJCudEm-J1ElJJh1OOxo9.jpg',
+            'ShowSlug': '2025-drums-along-the-rockies',
+            'ShowRead': 'False'
+        },
+        {
+            'ShowName': 'Corps Encore',
+            'ShowDate': '2025-06-30',
+            'ShowImageThumb': 'https://production.assets.dci.org/600x600-inset/673bb9727ac93c02e40aeb76_PedRAoC_kgVAvA6O7G2pGkp8dzcUWrER.jpg',
+            'ShowSlug': '2025-corps-encore',
+            'ShowRead': 'False'
+        }
+    ]
+
+    for show_info in input:
+        dynamo_table.put_item(Item=show_info)
+
+    print('Populated table')
+
+def create_tenants_table(dynamo_db):
+    dynamo_db.create_table(
+                AttributeDefinitions=[
+                    {
+                        'AttributeName': 'DiscordHookUrl',
+                        'AttributeType': 'S'
+                    },
+                    {
+                        'AttributeName': 'DiscordServer',
+                        'AttributeType': 'S'
+                    }
+                ],
+                TableName='DCI-Score-Tenants',
+                KeySchema=[
+                    {
+                        'AttributeName': 'DiscordHookUrl',
+                        'KeyType': 'HASH'
+                    },
+                    {
+                        'AttributeName': 'DiscordServer',
+                        'KeyType': 'RANGE'
+                    }
+                ],
+                ProvisionedThroughput= {
+                        'ReadCapacityUnits': 10,
+                        'WriteCapacityUnits': 10
+                }
+            )
+
+    print('CreatedTable')
+
+    dynamo_table = dynamo_db.Table('DCI-Score-Tenants')
+
+    input = [
+        {
+            'DiscordHookUrl': '',
+            'DiscordServer': '',
+        }
+    ]
+
+    for discord_hook in input:
+        dynamo_table.put_item(Item=discord_hook)
+
+    print("populated table")
+
 @dataclass
 class Corps:
     name: str
@@ -34,11 +126,20 @@ def init_services():
     print("Initializing services")
     load_dotenv()
     # client
-    dynamo_db = boto3.resource("dynamodb", getenv('DYNAMO_REGION'))
+    dynamo_db = boto3.resource(
+                                'dynamodb', 
+                                endpoint_url='http://localhost:8000',
+                                region_name='foo',
+                                aws_access_key_id='foo',
+                                aws_secret_access_key='foo'
+                            )
+    
+    # create_score_table(dynamo_db)
+    # create_tenants_table(dynamo_db)
 
     return (
-        DiscordWebhook(url=getenv('HOOK_URL')),
-        dynamo_db.Table(getenv('DYNAMO_TABLE'))
+        DiscordWebhook(url=getenv('TEST_HOOK_URL')),
+        dynamo_db.Table(getenv('DYNAMO_SHOW_TABLE_LOCAL'))
     )
 
 def read_items(dynamo_table): 
@@ -47,7 +148,7 @@ def read_items(dynamo_table):
     print(current_date)
 
     return dynamo_table.scan(
-        FilterExpression=Attr('ShowDate').lte(current_date) & Attr('ShowRead').eq('False')
+        FilterExpression=Attr("ShowRead").eq("Flase") & Attr("ShowDate").eq(current_date)
     )
 
 def update_table(show_items, processed_slugs, dynamo_table):
@@ -203,7 +304,7 @@ def parse_html(html_page):
 
     return pd.DataFrame(all_rows)
             
-def lambda_handler(event, context):
+def lambda_handler():
     print("Invoking Lambda")
     field_embeds = []
     processed_slugs = []
@@ -237,3 +338,5 @@ def lambda_handler(event, context):
             'statusCode': 200,
             'body': json.dumps('No shows processed successfully')
         }
+
+lambda_handler()
