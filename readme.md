@@ -18,8 +18,10 @@ Create your text channel that you want the hook to post to, edit the channel set
 #### Local Testing
 Steps:
 1. Clone this repo `git clone https://github.com/MKanarr/DCI-Scores.git`
-2. Run `pip3 install -r requirements.txt`
-3. Create/Update `.env`
+2. Create virtual env `python3 -m venv <your-env-name>`
+3. Active virtual env `source <your-env-name>/bin/activate`
+4. Run `pip3 install -r requirements.txt`
+5. Create/Update `.env`
     * Sample
         ```bash
         TEST_HOOK_URL=<discord-web-hook-url>
@@ -27,6 +29,6 @@ Steps:
         # used to webscrape scores
         SCORE_URL=https://www.dci.org/score/final-scores/
         ```
-4. Run `docker compose up`
+6. Run `docker compose up` in another terminal window
     * Docker daemon must be running
-5. Run `python3 dci-hook-local.py`
+7. Run `python3 dci-hook-local.py`
