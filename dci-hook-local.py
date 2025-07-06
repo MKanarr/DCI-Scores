@@ -41,14 +41,14 @@ def create_score_table(dynamo_db):
     input = [
         {
             'ShowName': 'Drums Along the Rockies',
-            'ShowDate': '2025-06-28',
+            'ShowDate': '2025-07-06',
             'ShowImageThumb': 'https://production.assets.dci.org/600x600-inset/673bb9497ac93c02e40aeb74_WOfwkJeXxqafJCudEm-J1ElJJh1OOxo9.jpg',
             'ShowSlug': '2025-drums-along-the-rockies',
             'ShowRead': 'False'
         },
         {
             'ShowName': 'Corps Encore',
-            'ShowDate': '2025-06-30',
+            'ShowDate': '2025-07-05',
             'ShowImageThumb': 'https://production.assets.dci.org/600x600-inset/673bb9727ac93c02e40aeb76_PedRAoC_kgVAvA6O7G2pGkp8dzcUWrER.jpg',
             'ShowSlug': '2025-corps-encore',
             'ShowRead': 'False'
@@ -60,50 +60,9 @@ def create_score_table(dynamo_db):
 
     print('Populated table')
 
-def create_tenants_table(dynamo_db):
-    dynamo_db.create_table(
-                AttributeDefinitions=[
-                    {
-                        'AttributeName': 'DiscordHookUrl',
-                        'AttributeType': 'S'
-                    },
-                    {
-                        'AttributeName': 'DiscordServer',
-                        'AttributeType': 'S'
-                    }
-                ],
-                TableName='DCI-Score-Tenants',
-                KeySchema=[
-                    {
-                        'AttributeName': 'DiscordHookUrl',
-                        'KeyType': 'HASH'
-                    },
-                    {
-                        'AttributeName': 'DiscordServer',
-                        'KeyType': 'RANGE'
-                    }
-                ],
-                ProvisionedThroughput= {
-                        'ReadCapacityUnits': 10,
-                        'WriteCapacityUnits': 10
-                }
-            )
-
-    print('CreatedTable')
-
-    dynamo_table = dynamo_db.Table('DCI-Score-Tenants')
-
-    input = [
-        {
-            'DiscordHookUrl': '',
-            'DiscordServer': '',
-        }
-    ]
-
-    for discord_hook in input:
-        dynamo_table.put_item(Item=discord_hook)
-
-    print("populated table")
+def delete_table(dynamo_table):
+    print('deleting table')
+    dynamo_table.delete()
 
 @dataclass
 class Corps:
@@ -133,8 +92,7 @@ def init_services():
                                 aws_secret_access_key='foo'
                             )
     
-    # create_score_table(dynamo_db)
-    # create_tenants_table(dynamo_db)
+    create_score_table(dynamo_db)
 
     return (
         DiscordWebhook(url=getenv('TEST_HOOK_URL')),
@@ -150,7 +108,7 @@ def read_items(dynamo_table):
     print(preivous_date)
 
     return dynamo_table.scan(
-        FilterExpression=Attr("ShowRead").eq("True") & Attr("ShowDate").between(preivous_date, todays_date)
+        FilterExpression=Attr("ShowRead").eq("False") & Attr("ShowDate").between(preivous_date, todays_date)
     )
 
 def update_table(show_items, processed_slugs, dynamo_table):
@@ -334,6 +292,7 @@ def lambda_handler():
         print("All shows processed successfully.")
         post_embed(webhook, field_embeds)
         update_table(show_items, processed_slugs, dynamo_table)
+        delete_table(dynamo_table)
         return {
             'statusCode': 200,
             'body': json.dumps('Posted Scores')
