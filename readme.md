@@ -9,3 +9,21 @@ All the dirty work has been handled!
 
 ### How to use?
 Create your text channel that you want the hook to post to, edit the channel settings, and create a webhook underneath the integrations tab!  From there, provide the webhook URL and then you're all set - the hook will start posting scores when the time comes! 
+
+#### Prerequisites
+1. Have Python 3.x installed - https://www.python.org/downloads/
+2. Have latest version of docker desktop - https://www.docker.com/products/docker-desktop/
+3. Have pip installed - https://pip.pypa.io/en/stable/installation/#
+
+#### Local Testing
+Steps:
+1. Clone this repo `git clone https://github.com/MKanarr/DCI-Scores.git`
+2. Run `pip3 install -r requirements.txt`
+3. Create/Update `.env`
+    * Sample
+        ```bash
+        TEST_HOOK_URL=<discord-web-hook-url>
+        DYNAMO_SHOW_TABLE_LOCAL=<local-table-name>
+        # used to webscrape scores
+        SCORE_URL=https://www.dci.org/score/final-scores/
+        ```
