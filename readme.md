@@ -27,3 +27,6 @@ Steps:
         # used to webscrape scores
         SCORE_URL=https://www.dci.org/score/final-scores/
         ```
+4. Run `docker compose up`
+    * Docker daemon must be running
+5. Run `python3 dci-hook-local.py`
