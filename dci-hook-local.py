@@ -7,6 +7,7 @@ import pytz
 from dotenv import load_dotenv
 from os import getenv
 from datetime import datetime
+from datetime import timedelta
 from boto3.dynamodb.conditions import Attr
 from discord_webhook import DiscordWebhook
 from dataclasses import dataclass
@@ -40,14 +41,14 @@ def create_score_table(dynamo_db):
     input = [
         {
             'ShowName': 'Drums Along the Rockies',
-            'ShowDate': '2025-06-28',
+            'ShowDate': '2025-07-06',
             'ShowImageThumb': 'https://production.assets.dci.org/600x600-inset/673bb9497ac93c02e40aeb74_WOfwkJeXxqafJCudEm-J1ElJJh1OOxo9.jpg',
             'ShowSlug': '2025-drums-along-the-rockies',
             'ShowRead': 'False'
         },
         {
             'ShowName': 'Corps Encore',
-            'ShowDate': '2025-06-30',
+            'ShowDate': '2025-07-05',
             'ShowImageThumb': 'https://production.assets.dci.org/600x600-inset/673bb9727ac93c02e40aeb76_PedRAoC_kgVAvA6O7G2pGkp8dzcUWrER.jpg',
             'ShowSlug': '2025-corps-encore',
             'ShowRead': 'False'
@@ -59,50 +60,9 @@ def create_score_table(dynamo_db):
 
     print('Populated table')
 
-def create_tenants_table(dynamo_db):
-    dynamo_db.create_table(
-                AttributeDefinitions=[
-                    {
-                        'AttributeName': 'DiscordHookUrl',
-                        'AttributeType': 'S'
-                    },
-                    {
-                        'AttributeName': 'DiscordServer',
-                        'AttributeType': 'S'
-                    }
-                ],
-                TableName='DCI-Score-Tenants',
-                KeySchema=[
-                    {
-                        'AttributeName': 'DiscordHookUrl',
-                        'KeyType': 'HASH'
-                    },
-                    {
-                        'AttributeName': 'DiscordServer',
-                        'KeyType': 'RANGE'
-                    }
-                ],
-                ProvisionedThroughput= {
-                        'ReadCapacityUnits': 10,
-                        'WriteCapacityUnits': 10
-                }
-            )
-
-    print('CreatedTable')
-
-    dynamo_table = dynamo_db.Table('DCI-Score-Tenants')
-
-    input = [
-        {
-            'DiscordHookUrl': '',
-            'DiscordServer': '',
-        }
-    ]
-
-    for discord_hook in input:
-        dynamo_table.put_item(Item=discord_hook)
-
-    print("populated table")
+def delete_table(dynamo_table):
+    print('deleting table')
+    dynamo_table.delete()
 
 @dataclass
 class Corps:
@@ -112,15 +72,13 @@ class Corps:
     rank: int
 
     def __str__(self):
-        match self.rank:
-            case '1':
-                self.rank = ':first_place:'
-            case '2':
-                self.rank = ':second_place:'
-            case '3':
-                self.rank = ':third_place:'
+        ranks = {
+            '1': ':first_place:',
+            '2': ':second_place:',
+            '3': ':third_place:'
+        }
 
-        return f'{self.rank} - {self.name} - {self.score}\n'
+        return f'{ranks.get(self.rank, self.rank)} - {self.name} - {self.score}\n'
     
 def init_services():
     print("Initializing services")
@@ -134,8 +92,7 @@ def init_services():
                                 aws_secret_access_key='foo'
                             )
     
-    # create_score_table(dynamo_db)
-    # create_tenants_table(dynamo_db)
+    create_score_table(dynamo_db)
 
     return (
         DiscordWebhook(url=getenv('TEST_HOOK_URL')),
@@ -144,11 +101,14 @@ def init_services():
 
 def read_items(dynamo_table): 
     print("Reading items")
-    current_date = datetime.now(pytz.timezone('America/Chicago')).strftime('%Y-%m-%d')    
-    print(current_date)
+    ref_date = datetime.now(pytz.timezone('America/Chicago'))
+    todays_date = ref_date.strftime('%Y-%m-%d')
+    preivous_date = (ref_date - timedelta(1)).strftime('%Y-%m-%d')
+    print(todays_date)
+    print(preivous_date)
 
     return dynamo_table.scan(
-        FilterExpression=Attr("ShowRead").eq("Flase") & Attr("ShowDate").eq(current_date)
+        FilterExpression=Attr("ShowRead").eq("False") & Attr("ShowDate").between(preivous_date, todays_date)
     )
 
 def update_table(show_items, processed_slugs, dynamo_table):
@@ -211,12 +171,12 @@ def create_embed(show_df, slug, show_img, show_name, show_date):
 
     embed_fields.append({
         "name": "Recap",
-        "value": f"https://www.dci.org/score/recap/{slug}",
+        "value": f"https://www.dci.org/scores/recap/{slug}",
     })
 
     return {
         "title": show_name,
-        "url": f"https://www.dci.org/score/final-scores/{slug}",
+        "url": f"https://www.dci.org/scores/final-scores/{slug}",
         "fields": embed_fields,
         "image": {"url": show_img},
     }
@@ -319,15 +279,20 @@ def lambda_handler():
     print(show_items)
 
     for show_entry in show_items:
-        embed = process_show(show_entry)
-        if embed:
-            field_embeds.append(embed)
-            processed_slugs.append(show_entry['ShowSlug'])
+        try:
+            embed = process_show(show_entry)
+            if embed:
+                field_embeds.append(embed)
+                processed_slugs.append(show_entry['ShowSlug'])
+        except Exception as e: 
+            print(f'Error processing show {show_entry["ShowSlug"]}: {e}')
+            continue
 
     if field_embeds:
         print("All shows processed successfully.")
         post_embed(webhook, field_embeds)
         update_table(show_items, processed_slugs, dynamo_table)
+        delete_table(dynamo_table)
         return {
             'statusCode': 200,
             'body': json.dumps('Posted Scores')

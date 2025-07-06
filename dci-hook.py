@@ -7,6 +7,7 @@ import pytz
 from dotenv import load_dotenv
 from os import getenv
 from datetime import datetime
+from datetime import timedelta
 from boto3.dynamodb.conditions import Attr
 from discord_webhook import DiscordWebhook
 from dataclasses import dataclass
@@ -20,15 +21,13 @@ class Corps:
     rank: int
 
     def __str__(self):
-        match self.rank:
-            case '1':
-                self.rank = ':first_place:'
-            case '2':
-                self.rank = ':second_place:'
-            case '3':
-                self.rank = ':third_place:'
+        ranks = {
+            '1': ':first_place:',
+            '2': ':second_place:',
+            '3': ':third_place:'
+        }
 
-        return f'{self.rank} - {self.name} - {self.score}\n'
+        return f'{ranks.get(self.rank, self.rank)} - {self.name} - {self.score}\n'
     
 def init_services():
     print("Initializing services")
@@ -43,11 +42,14 @@ def init_services():
 
 def read_items(dynamo_table): 
     print("Reading items")
-    current_date = datetime.now(pytz.timezone('America/Chicago')).strftime('%Y-%m-%d')    
-    print(current_date)
+    ref_date = datetime.now(pytz.timezone('America/Chicago'))
+    todays_date = ref_date.strftime('%Y-%m-%d')
+    preivous_date = (ref_date - timedelta(1)).strftime('%Y-%m-%d')
+    print(todays_date)
+    print(preivous_date)
 
     return dynamo_table.scan(
-        FilterExpression=Attr('ShowDate').lte(current_date) & Attr('ShowRead').eq('False')
+        FilterExpression=Attr("ShowRead").eq("False") & Attr("ShowDate").between(preivous_date, todays_date)
     )
 
 def update_table(show_items, processed_slugs, dynamo_table):
@@ -110,12 +112,12 @@ def create_embed(show_df, slug, show_img, show_name, show_date):
 
     embed_fields.append({
         "name": "Recap",
-        "value": f"https://www.dci.org/score/recap/{slug}",
+        "value": f"https://www.dci.org/scores/recap/{slug}",
     })
 
     return {
         "title": show_name,
-        "url": f"https://www.dci.org/score/final-scores/{slug}",
+        "url": f"https://www.dci.org/scores/final-scores/{slug}",
         "fields": embed_fields,
         "image": {"url": show_img},
     }
@@ -218,10 +220,14 @@ def lambda_handler(event, context):
     print(show_items)
 
     for show_entry in show_items:
-        embed = process_show(show_entry)
-        if embed:
-            field_embeds.append(embed)
-            processed_slugs.append(show_entry['ShowSlug'])
+        try:
+            embed = process_show(show_entry)
+            if embed:
+                field_embeds.append(embed)
+                processed_slugs.append(show_entry['ShowSlug'])
+        except Exception as e: 
+            print(f'Error processing show {show_entry["ShowSlug"]}: {e}')
+            continue
 
     if field_embeds:
         print("All shows processed successfully.")
